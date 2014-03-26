@@ -3,12 +3,15 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
   this.inputManager   = new InputManager;
   this.storageManager = new StorageManager;
   this.actuator       = new Actuator;
+  this.recordManager  = new RecordManager;
 
   this.startTiles     = 2;
+  this.delayMove	  = 500;
 
   this.inputManager.on("move", this.move.bind(this));
   this.inputManager.on("restart", this.restart.bind(this));
   this.inputManager.on("keepPlaying", this.keepPlaying.bind(this));
+  this.inputManager.on("playRecord", this.playRecord.bind(this));
 
   this.setup();
 }
@@ -16,6 +19,8 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
 // Restart the game
 GameManager.prototype.restart = function () {
   this.storageManager.clearGameState();
+  this.recordManager.clear();
+  this.replaying   = false;
   this.actuator.continueGame(); // Clear the game won/lost message
   this.setup();
 };
@@ -24,6 +29,38 @@ GameManager.prototype.restart = function () {
 GameManager.prototype.keepPlaying = function () {
   this.keepPlaying = true;
   this.actuator.continueGame(); // Clear the game won/lost message
+};
+
+GameManager.prototype.playRecord = function () {
+  if (this.replaying) this.restart();
+  this.storageManager.clearGameState();
+  this.actuator.continueGame();
+  
+  this.grid        = new Grid(this.size);
+  this.score       = 0;
+  this.over        = false;
+  this.won         = false;
+  this.keepPlaying = false;
+  this.replaying   = true;
+  
+  this.actuate();
+  
+  this.doReplay(this);
+};
+
+GameManager.prototype.doReplay = function (self) {
+  var move = self.recordManager.getMove();
+  if (move) {
+	self.move(move-1);
+	setTimeout(self.doReplay, self.delayMove, self);
+  } else {
+	var tile = self.recordManager.getTile();
+	if (tile) {
+		self.grid.insertTile(tile);
+		self.actuate();
+		self.doReplay(self);
+	}
+  }
 };
 
 // Return true if the game is lost, or has won and the user hasn't kept playing
@@ -47,6 +84,7 @@ GameManager.prototype.setup = function () {
     this.over        = previousState.over;
     this.won         = previousState.won;
     this.keepPlaying = previousState.keepPlaying;
+	this.recordManager.load(previousState.record.moves,previousState.record.tiles);
   } else {
     this.grid        = new Grid(this.size);
     this.score       = 0;
@@ -65,6 +103,7 @@ GameManager.prototype.setup = function () {
 // Set up the initial tiles to start the game with
 GameManager.prototype.addStartTiles = function () {
   for (var i = 0; i < this.startTiles; i++) {
+	this.recordManager.addMove(null);
     this.addRandomTile();
   }
 };
@@ -75,6 +114,7 @@ GameManager.prototype.addRandomTile = function () {
     var value = Math.random() < 0.9 ? 2 : 4;
     var tile = new Tile(this.grid.randomAvailableCell(), value);
 
+	this.recordManager.addTile(tile);
     this.grid.insertTile(tile);
   }
 };
@@ -89,7 +129,8 @@ GameManager.prototype.actuate = function () {
   if (this.over) {
     this.storageManager.clearGameState();
   } else {
-    this.storageManager.setGameState(this.serialize());
+    if (!this.replaying)
+		this.storageManager.setGameState(this.serialize());
   }
 
   this.actuator.actuate(this.grid, {
@@ -99,6 +140,7 @@ GameManager.prototype.actuate = function () {
     bestScore:  this.storageManager.getBestScore(),
     terminated: this.isGameTerminated()
   });
+  
 
 };
 
@@ -109,7 +151,8 @@ GameManager.prototype.serialize = function () {
     score:       this.score,
     over:        this.over,
     won:         this.won,
-    keepPlaying: this.keepPlaying
+    keepPlaying: this.keepPlaying,
+	record:	 this.recordManager.serialize()
   };
 };
 
@@ -184,7 +227,13 @@ GameManager.prototype.move = function (direction) {
   });
 
   if (moved) {
-    this.addRandomTile();
+	if (!this.replaying) {
+		this.recordManager.addMove(direction+1);
+		this.addRandomTile();
+	} else {
+		var tile = this.recordManager.getTile();
+		this.grid.insertTile(tile);
+	}
 
     if (!this.movesAvailable()) {
       this.over = true; // Game over!
