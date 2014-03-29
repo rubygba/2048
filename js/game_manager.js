@@ -32,7 +32,7 @@ GameManager.prototype.keepPlaying = function () {
 };
 
 GameManager.prototype.playRecord = function () {
-  if (this.replaying) this.restart();
+  if (this.replaying&&!this.won) this.restart();
   this.storageManager.clearGameState();
   this.actuator.continueGame();
   
