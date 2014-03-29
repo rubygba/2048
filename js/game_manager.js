@@ -6,7 +6,7 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
   this.recordManager  = new RecordManager;
 
   this.startTiles     = 2;
-  this.delayMove	  = 500;
+  this.delayMove	  = 100;
 
   this.inputManager.on("move", this.move.bind(this));
   this.inputManager.on("restart", this.restart.bind(this));
@@ -32,15 +32,15 @@ GameManager.prototype.keepPlaying = function () {
 };
 
 GameManager.prototype.playRecord = function () {
-  if (this.replaying&&!this.won) this.restart();
   this.storageManager.clearGameState();
   this.actuator.continueGame();
+  this.recordManager.startReplay();
   
   this.grid        = new Grid(this.size);
   this.score       = 0;
   this.over        = false;
   this.won         = false;
-  this.keepPlaying = false;
+  this.keepPlaying = true;
   this.replaying   = true;
   
   this.actuate();
@@ -56,6 +56,8 @@ GameManager.prototype.doReplay = function (self) {
   } else {
 	var tile = self.recordManager.getTile();
 	if (tile) {
+		self.recordManager.addTile(tile);
+		self.recordManager.addMove(0);
 		self.grid.insertTile(tile);
 		self.actuate();
 		self.doReplay(self);
@@ -65,7 +67,7 @@ GameManager.prototype.doReplay = function (self) {
 
 // Return true if the game is lost, or has won and the user hasn't kept playing
 GameManager.prototype.isGameTerminated = function () {
-  if (this.over || (this.won && !this.keepPlaying)) {
+  if (this.over || (this.won && !this.keepPlaying && !this.replaying)) {
     return true;
   } else {
     return false;
@@ -103,7 +105,7 @@ GameManager.prototype.setup = function () {
 // Set up the initial tiles to start the game with
 GameManager.prototype.addStartTiles = function () {
   for (var i = 0; i < this.startTiles; i++) {
-	this.recordManager.addMove(null);
+	this.recordManager.addMove(0);
     this.addRandomTile();
   }
 };
@@ -227,11 +229,12 @@ GameManager.prototype.move = function (direction) {
   });
 
   if (moved) {
+	this.recordManager.addMove(direction+1);
 	if (!this.replaying) {
-		this.recordManager.addMove(direction+1);
 		this.addRandomTile();
 	} else {
 		var tile = this.recordManager.getTile();
+		this.recordManager.addTile(tile);
 		this.grid.insertTile(tile);
 	}
 
