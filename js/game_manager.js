@@ -6,7 +6,7 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
   this.recordManager  = new RecordManager;
 
   this.startTiles     = 2;
-  this.delayMove	  = 100;
+  this.delayMove	  = 500;
 
   this.inputManager.on("move", this.move.bind(this));
   this.inputManager.on("restart", this.restart.bind(this));
